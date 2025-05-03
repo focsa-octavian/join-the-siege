@@ -4,10 +4,12 @@ import io
 from spellchecker import SpellChecker
 from pypdf import PdfReader
 import easyocr
+from transformers import pipeline
 
 
 spell = SpellChecker()
 ocr_reader = easyocr.Reader(['en']) # model_storage_directory='~/.EasyOCR/model/', download_enabled=False
+classifier = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
 
 def base(filename):
     if "drivers_license" in filename or "drivers_licence" in filename:
@@ -54,6 +56,36 @@ def get_words(file):
 
     return []
 
+def get_sequence(words):
+    return " ".join(words)
+
+def get_text_classification(words):
+
+    SCORE_THRESHOLD = 0.6 # e.g.
+
+    labels = ['bank statement', 'drivers licence', 'invoice']
+    # labels = ['bank statement', 'drivers licence', 'invoice', 'miscellaneous']
+    # labels = ['bank statement', 'drivers licence', 'invoice', 'not bank statement', 'not drivers licence', 'not invoice'] # w/ multi_label=True
+    hypothesis_template = 'This text is about {}.'
+    sequence = get_sequence(words)
+
+    prediction = classifier(sequence, labels, hypothesis_template=hypothesis_template, multi_label=False)
+    label = prediction['labels'][0]
+    score = prediction['scores'][0]
+
+    if score < SCORE_THRESHOLD:
+        return None
+    
+    if label == "drivers licence":
+        return "drivers_licence"
+    elif label == "bank statement":
+        return "bank_statement"
+    elif label == "invoice":
+        return "invoice"
+
+    return None
+
+
 def classify_file(file: FileStorage):
     filename = file.filename.lower()
     # file_bytes = file.read()
@@ -85,6 +117,13 @@ def classify_file(file: FileStorage):
 
     if "invoice" in words:
         return "invoice"
+    
+    # 3 Text Classifier
+
+    text_classification = get_text_classification(words)
+
+    if text_classification:
+        return text_classification
 
     return "unknown file"
 
