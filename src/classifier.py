@@ -109,11 +109,11 @@ def classify_file(file: FileStorage):
 
     words = get_words(file)
 
-    if set(['bank', 'statement']) <= set(words):
-        return "bank_statement"
-    
     if set(["driving", "driver"]).intersection(words) and set(["licence", "license"]).intersection(words):
         return "drivers_licence"
+
+    if set(['bank', 'statement']) <= set(words):
+        return "bank_statement"
 
     if "invoice" in words:
         return "invoice"
