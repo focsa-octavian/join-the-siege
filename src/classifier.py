@@ -11,7 +11,9 @@ spell = SpellChecker()
 ocr_reader = easyocr.Reader(['en']) # model_storage_directory='~/.EasyOCR/model/', download_enabled=False
 classifier = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
 
-def base(filename):
+def classify_file_base(file: FileStorage):
+    filename = file.filename.lower()
+
     if "drivers_license" in filename or "drivers_licence" in filename:
         return "drivers_licence"
 
@@ -29,7 +31,16 @@ def get_spellcheck(filename):
     file_basename_correction = "_".join([spell.correction(word) for word in file_basename_list])
     return file_basename_correction
 
-def get_words(file):
+def classify_file_base_w_spell_check(file: FileStorage):
+
+    filename = file.filename.lower()
+
+    file_basename_correction = get_spellcheck(filename)
+    result = classify_file_base(file_basename_correction)
+
+    return result
+
+def get_words(file: FileStorage):
 
     filename = file.filename.lower()
     extension = filename.rsplit('.', 1)[1].lower()
@@ -56,12 +67,29 @@ def get_words(file):
 
     return []
 
+def classify_file_by_words_intersection(file: FileStorage):
+
+    words = get_words(file)
+
+    if set(["driving", "driver"]).intersection(words) and set(["licence", "license"]).intersection(words):
+        return "drivers_licence"
+
+    if set(['bank', 'statement']) <= set(words):
+        return "bank_statement"
+
+    if "invoice" in words:
+        return "invoice"
+    
+    return None
+
 def get_sequence(words):
     return " ".join(words)
 
-def get_text_classification(words):
+def classify_file_by_text(file: FileStorage):
 
     SCORE_THRESHOLD = 0.6 # e.g.
+
+    words = get_words(file)
 
     labels = ['bank statement', 'drivers licence', 'invoice']
     # labels = ['bank statement', 'drivers licence', 'invoice', 'miscellaneous']
@@ -85,45 +113,37 @@ def get_text_classification(words):
 
     return None
 
-
 def classify_file(file: FileStorage):
-    filename = file.filename.lower()
+    # filename = file.filename.lower()
     # file_bytes = file.read()
 
     # 0 Base
     
-    result = base(filename)
+    result = classify_file_base(file)
 
     if result:
         return result
     
     # 1 Base w/ spell check
-    
-    file_basename_correction = get_spellcheck(filename)
-    result = base(file_basename_correction)
+
+    result = classify_file_base_w_spell_check(file)
 
     if result:
         return result
     
     # 2 PDF Reader & OCR
+    
+    result = classify_file_by_words_intersection(file)
 
-    words = get_words(file)
-
-    if set(["driving", "driver"]).intersection(words) and set(["licence", "license"]).intersection(words):
-        return "drivers_licence"
-
-    if set(['bank', 'statement']) <= set(words):
-        return "bank_statement"
-
-    if "invoice" in words:
-        return "invoice"
+    if result:
+        return result
     
     # 3 Text Classifier
 
-    text_classification = get_text_classification(words)
+    result = classify_file_by_text(file)
 
-    if text_classification:
-        return text_classification
+    if result:
+        return result
 
     return "unknown file"
 
